@@ -1,0 +1,42 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Usuarios: cualquier autenticado puede leer y escribir
+    // (MVP — el admin necesita vincular usuarios a comercios)
+    match /usuarios/{userId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Comercios: lectura pública, escritura para autenticados
+    match /comercios/{commerceId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // Promociones: lectura pública, escritura para autenticados
+    match /promociones/{promoId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // Tickets y comunicaciones: solo autenticados
+    match /tickets/{ticketId} {
+      allow read, write: if request.auth != null;
+    }
+
+    match /comunicaciones/{comId} {
+      allow read, write: if request.auth != null;
+    }
+
+    match /comunicaciones_leidas/{readId} {
+      allow read, write: if request.auth != null;
+    }
+
+    match /legajos/{docId} {
+      allow read, write: if request.auth != null;
+    }
+
+  }
+}
