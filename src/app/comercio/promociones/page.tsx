@@ -82,7 +82,7 @@ export default function ComercioPromocionesPage() {
           status: 'pendiente_aprobacion',
           isFeatured: false,
         });
-        toast.success('Promoción enviada. El equipo de HOMA Mall la revisará pronto.');
+        toast.success('Promoción enviada. El equipo de Mall Digital la revisará pronto.');
       }
       setShowForm(false);
       loadPromos();

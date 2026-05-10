@@ -50,7 +50,7 @@ export default function FichaPage() {
             <h2 className="font-semibold text-slate-900 mb-1">Tu local no está vinculado aún</h2>
             <p className="text-sm text-slate-600 leading-relaxed">
               Tu usuario todavía no tiene un local asignado. Contactá a la administración de
-              HOMA Mall para que te vinculen con tu comercio.
+              Mall Digital para que te vinculen con tu comercio.
             </p>
           </div>
         </div>

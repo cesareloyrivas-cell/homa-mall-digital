@@ -76,7 +76,7 @@ export default function ComercioDashboardPage() {
           <div>
             <h2 className="font-semibold text-slate-900 mb-1">Tu local no está vinculado aún</h2>
             <p className="text-sm text-slate-600">
-              Contactá a la administración de HOMA Mall para que te asignen tu comercio.
+              Contactá a la administración de Mall Digital para que te asignen tu comercio.
             </p>
           </div>
         </div>

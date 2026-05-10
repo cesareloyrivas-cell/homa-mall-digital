@@ -82,7 +82,7 @@ export default function ComercioDocumentacionPage() {
         });
       }
 
-      toast.success('Documento enviado. El equipo de HOMA Mall lo revisará pronto.');
+      toast.success('Documento enviado. El equipo de Mall Digital lo revisará pronto.');
       load();
     } catch {
       toast.error('No se pudo subir el archivo.');
@@ -134,7 +134,7 @@ export default function ComercioDocumentacionPage() {
         <div>
           <h1 className="text-xl font-bold text-slate-900">Legajo documental</h1>
           <p className="text-sm text-slate-500 mt-0.5">
-            Documentación requerida para operar en HOMA Mall
+            Documentación requerida para operar en Mall Digital
             {commerce && <> · {commerce.category}</>}
           </p>
         </div>

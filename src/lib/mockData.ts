@@ -2,7 +2,7 @@ import { Commerce, Promotion, Tenant } from '@/types';
 
 export const MOCK_TENANT: Tenant = {
   id: 'homa_mall',
-  name: 'HOMA Mall',
+  name: 'Mall Digital',
   slug: 'homa-mall',
   description: 'El centro comercial más moderno de Carlos Paz. Más de 60 locales comerciales, gastronomía, entretenimiento y servicios en un solo lugar.',
   logoUrl: '',

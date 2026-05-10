@@ -42,7 +42,7 @@ export default function AdminDashboardPage() {
         <h1 className="text-2xl font-bold text-slate-900">
           Bienvenido, {usuario?.displayName?.split(' ')[0] ?? 'Admin'}
         </h1>
-        <p className="text-slate-500 text-sm mt-1">Panel de administración — HOMA Mall</p>
+        <p className="text-slate-500 text-sm mt-1">Panel de administración — Mall Digital</p>
       </div>
 
       {/* Stats */}

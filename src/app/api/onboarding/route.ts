@@ -52,9 +52,9 @@ export async function POST(req: NextRequest) {
 
     // 4. Enviar email con Nodemailer + Gmail
     await transporter.sendMail({
-      from: `"HOMA Mall" <${process.env.GMAIL_USER}>`,
+      from: `"Mall Digital" <${process.env.GMAIL_USER}>`,
       to: email,
-      subject: `¡Bienvenido a HOMA Mall! Activá tu acceso — ${commerceName}`,
+      subject: `¡Bienvenido a Mall Digital! Activá tu acceso — ${commerceName}`,
       html: onboardingEmailHtml({ email, commerceName, resetLink }),
     });
 
@@ -81,7 +81,7 @@ function onboardingEmailHtml({
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Bienvenido a HOMA Mall</title>
+  <title>Bienvenido a Mall Digital</title>
 </head>
 <body style="margin:0;padding:0;background-color:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f8fafc;padding:40px 20px;">
@@ -99,7 +99,7 @@ function onboardingEmailHtml({
                   </td>
                   <td style="padding-left:10px;vertical-align:middle;">
                     <span style="color:white;font-size:20px;font-weight:800;letter-spacing:-0.5px;">
-                      HOMA <span style="color:#f59e0b;">Mall</span>
+                      Mall <span style="color:#f59e0b;">Digital</span>
                     </span>
                   </td>
                 </tr>
@@ -111,10 +111,10 @@ function onboardingEmailHtml({
           <tr>
             <td style="background-color:#ffffff;padding:40px;border-left:1px solid #e2e8f0;border-right:1px solid #e2e8f0;">
               <h1 style="margin:0 0 8px;font-size:24px;font-weight:800;color:#0f172a;">
-                ¡Bienvenido a HOMA Mall! 🎉
+                ¡Bienvenido a Mall Digital! 🎉
               </h1>
               <p style="margin:0 0 24px;font-size:16px;color:#64748b;line-height:1.6;">
-                Tu comercio <strong style="color:#0f172a;">${commerceName}</strong> ya está registrado en el sistema de HOMA Mall.
+                Tu comercio <strong style="color:#0f172a;">${commerceName}</strong> ya está registrado en el sistema de Mall Digital.
               </p>
 
               <table cellpadding="0" cellspacing="0" style="background-color:#fef3c7;border:1px solid #fde68a;border-radius:12px;padding:20px;margin-bottom:32px;width:100%;">
@@ -159,7 +159,7 @@ function onboardingEmailHtml({
           <tr>
             <td style="background-color:#f8fafc;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 16px 16px;padding:24px 40px;text-align:center;">
               <p style="margin:0;font-size:12px;color:#94a3b8;">
-                © ${new Date().getFullYear()} HOMA Mall · Carlos Paz, Córdoba<br/>
+                © ${new Date().getFullYear()} Mall Digital<br/>
                 Si no esperabas este email, podés ignorarlo.
               </p>
             </td>

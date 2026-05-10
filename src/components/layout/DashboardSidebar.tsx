@@ -62,7 +62,7 @@ export default function DashboardSidebar() {
         </div>
         {!collapsed && (
           <span className="font-bold text-sm tracking-tight">
-            HOMA <span className="text-amber-400">Mall</span>
+            Mall <span className="text-amber-400">Digital</span>
           </span>
         )}
         <button

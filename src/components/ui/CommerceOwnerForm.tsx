@@ -51,7 +51,7 @@ export default function CommerceOwnerForm({ initial, readonlyInfo, onSubmit }: P
       {/* Info de solo lectura */}
       <section className="bg-slate-50 border border-slate-200 rounded-2xl p-5">
         <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
-          Datos del local (administrados por HOMA Mall)
+          Datos del local (administrados por Mall Digital)
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
