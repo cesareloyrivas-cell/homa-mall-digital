@@ -68,7 +68,7 @@ export default function LoginPage() {
             <ShoppingBag className="w-5 h-5 text-white" />
           </div>
           <span className="font-bold text-white text-base">
-            HOMA <span className="text-amber-400">Mall</span>
+            Mall <span className="text-amber-400">Digital</span>
           </span>
         </Link>
         <Link href="/" className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-white transition-colors">

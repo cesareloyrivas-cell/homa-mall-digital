@@ -15,9 +15,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'HOMA Mall — Centro Comercial Carlos Paz',
+  title: 'Mall Digital — Centro Comercial',
   description:
-    'El centro comercial más moderno de Carlos Paz. Más de 60 locales, gastronomía, entretenimiento y servicios.',
+    'El centro comercial más moderno de la región. Más de 60 locales, gastronomía, entretenimiento y servicios.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

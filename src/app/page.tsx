@@ -37,7 +37,7 @@ const TERRITORY_CARDS = [
   { icon: Building2, title: 'Corredor Córdoba–Carlos Paz', desc: 'Uno de los corredores comerciales de mayor crecimiento de la región centro.' },
   { icon: Users, title: 'Zona residencial en expansión', desc: 'Rodeado de barrios privados, countries y nuevos desarrollos urbanos.' },
   { icon: TrendingUp, title: 'Flujo turístico y permanente', desc: 'Carlos Paz recibe más de 2 millones de turistas anuales.' },
-  { icon: Star, title: 'Nuevo polo comercial', desc: 'HOMA Mall se posiciona como referente del consumo moderno en la región.' },
+  { icon: Star, title: 'Nuevo polo comercial', desc: 'Mall Digital se posiciona como referente del consumo moderno en la región.' },
 ];
 
 export default function HomePage() {
@@ -70,8 +70,8 @@ export default function HomePage() {
                 <MapPin className="w-3.5 h-3.5" /> Carlos Paz · Córdoba · Argentina
               </div>
               <h1 className="text-5xl sm:text-6xl lg:text-7xl font-extrabold leading-[1.08] tracking-tight mb-6">
-                HOMA
-                <span className="block text-amber-400">Mall</span>
+                Mall
+                <span className="block text-amber-400">Digital</span>
               </h1>
               <p className="text-lg sm:text-xl text-slate-300 mb-4 leading-relaxed font-light max-w-2xl">
                 El nuevo punto de encuentro comercial de Carlos Paz y la región.
@@ -122,7 +122,7 @@ export default function HomePage() {
                 Un mall pensado para una zona en crecimiento
               </h2>
               <p className="text-slate-500 leading-relaxed">
-                HOMA Mall se proyecta como un nuevo ecosistema comercial en una ubicación estratégica del corredor Córdoba–Carlos Paz, conectado con una zona de fuerte crecimiento poblacional, turístico y comercial.
+                Mall Digital se proyecta como un nuevo ecosistema comercial en una ubicación estratégica, conectado con una zona de fuerte crecimiento poblacional, turístico y comercial.
               </p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
@@ -166,7 +166,7 @@ export default function HomePage() {
               <div className="flex items-end justify-between mb-10">
                 <div>
                   <p className="text-amber-600 font-semibold text-sm mb-1 uppercase tracking-wider">Nuestros locales</p>
-                  <h2 className="text-3xl font-bold text-slate-900">Conocé el ecosistema HOMA</h2>
+                  <h2 className="text-3xl font-bold text-slate-900">Conocé el ecosistema Mall Digital</h2>
                 </div>
                 <Link href="/locales" className="hidden sm:flex items-center gap-1.5 text-sm font-semibold text-amber-600 hover:text-amber-700 transition-colors">
                   Ver todos <ArrowRight className="w-4 h-4" />
@@ -224,7 +224,7 @@ export default function HomePage() {
               </div>
               <p className="text-amber-400 font-semibold text-sm mb-3 uppercase tracking-wider">Para marcas y comercios</p>
               <h2 className="text-3xl sm:text-4xl font-bold mb-5">
-                ¿Querés formar parte del ecosistema HOMA?
+                ¿Querés formar parte de Mall Digital?
               </h2>
               <p className="text-slate-400 leading-relaxed mb-10">
                 Cada comercio cuenta con ficha pública propia, promociones activas, contacto directo y presencia digital dentro del mall. Formá parte de un nuevo polo comercial estratégico.
@@ -250,7 +250,7 @@ export default function HomePage() {
                 Un mall con gestión digital desde el primer día
               </h2>
               <p className="text-slate-500 max-w-xl mx-auto">
-                HOMA Mall Digital centraliza la comunicación, documentación, promociones y operativa del centro comercial en una sola plataforma.
+                Mall Digital centraliza la comunicación, documentación, promociones y operativa del centro comercial en una sola plataforma.
               </p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">

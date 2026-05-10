@@ -13,11 +13,11 @@ export default function PublicFooter() {
                 <ShoppingBag className="w-5 h-5 text-white" />
               </div>
               <span className="font-bold text-white text-lg">
-                HOMA <span className="text-amber-400">Mall</span>
+                Mall <span className="text-amber-400">Digital</span>
               </span>
             </div>
             <p className="text-sm text-slate-400 leading-relaxed">
-              El centro comercial más moderno de Carlos Paz. Más de 60 locales, gastronomía, entretenimiento y servicios.
+              El centro comercial más moderno de la región. Más de 60 locales, gastronomía, entretenimiento y servicios.
             </p>
           </div>
 
@@ -77,7 +77,7 @@ export default function PublicFooter() {
         </div>
 
         <div className="border-t border-slate-700 pt-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
-          <span>© {new Date().getFullYear()} HOMA Mall. Todos los derechos reservados.</span>
+          <span>© {new Date().getFullYear()} Mall Digital. Todos los derechos reservados.</span>
           <span>Plataforma digital desarrollada con MallOS</span>
         </div>
       </div>

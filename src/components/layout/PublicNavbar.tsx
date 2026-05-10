@@ -26,7 +26,7 @@ export default function PublicNavbar() {
               <ShoppingBag className="w-5 h-5 text-white" />
             </div>
             <span className="font-bold text-white text-lg tracking-tight">
-              HOMA <span className="text-amber-400">Mall</span>
+              Mall <span className="text-amber-400">Digital</span>
             </span>
           </Link>
 

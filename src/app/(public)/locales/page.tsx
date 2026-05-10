@@ -50,7 +50,7 @@ export default function LocalesPage() {
             </span>
           </div>
           <h1 className="text-3xl sm:text-4xl font-bold mb-3">
-            Todos los comercios de <span className="text-amber-400">HOMA Mall</span>
+            Todos los comercios de <span className="text-amber-400">Mall Digital</span>
           </h1>
           <p className="text-slate-400 text-base max-w-xl">
             Explorá la variedad de locales, servicios y gastronomía que tenemos para vos.

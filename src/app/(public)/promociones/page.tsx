@@ -25,7 +25,7 @@ export default function PromocionesPage() {
             <span className="text-amber-400 font-semibold text-sm uppercase tracking-wider">Ofertas vigentes</span>
           </div>
           <h1 className="text-3xl sm:text-4xl font-bold mb-3">
-            Promociones de <span className="text-amber-400">HOMA Mall</span>
+            Promociones de <span className="text-amber-400">Mall Digital</span>
           </h1>
           <p className="text-slate-400 text-base max-w-xl">
             Las mejores ofertas y descuentos de nuestros locales, actualizadas cada semana.

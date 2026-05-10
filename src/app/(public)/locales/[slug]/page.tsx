@@ -222,7 +222,7 @@ export default function CommerceDetailPage() {
               <p className="text-xs text-blue-600 leading-relaxed">
                 {commerce.publicStatus === 'protegido'
                   ? 'Este comercio tiene su documentación y coberturas informadas al día.'
-                  : 'Este comercio ha sido verificado por la administración de HOMA Mall.'}
+                  : 'Este comercio ha sido verificado por la administración de Mall Digital.'}
               </p>
             </div>
           )}
