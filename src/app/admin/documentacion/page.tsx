@@ -4,13 +4,15 @@ import { useEffect, useState, useMemo } from 'react';
 import { useCommerces } from '@/hooks/useCommerces';
 import {
   getAllDocuments, createDocument, updateDocument,
-  getDocumentSemaphore, isExpiringSoon, DOCUMENT_TYPES, Semaphore,
+  getDocumentSemaphore, isExpiringSoon, Semaphore,
 } from '@/lib/documentService';
+import { getBusinessModel, MODEL_CONFIGS } from '@/lib/businessModels';
+import { getTemplateForModel } from '@/lib/documentTemplates';
 import { useAuth } from '@/context/AuthContext';
-import { CommercDocument, DocumentStatus, Commerce } from '@/types';
+import { CommercDocument, DocumentStatus } from '@/types';
 import {
-  FileText, ChevronDown, ChevronUp, Plus, CheckCircle, XCircle,
-  AlertTriangle, ExternalLink, X, RefreshCw,
+  FileText, ChevronDown, ChevronUp, CheckCircle, XCircle,
+  AlertTriangle, ExternalLink, X, RefreshCw, Circle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -36,19 +38,14 @@ export default function AdminDocumentacionPage() {
   const [allDocs, setAllDocs] = useState<CommercDocument[]>([]);
   const [loadingDocs, setLoadingDocs] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [addingFor, setAddingFor] = useState<string | null>(null);
-  const [newDocForm, setNewDocForm] = useState({ type: DOCUMENT_TYPES[0], notes: '', expiresAt: '' });
   const [reviewModal, setReviewModal] = useState<{ doc: CommercDocument } | null>(null);
   const [reviewForm, setReviewForm] = useState({ status: 'aprobado' as DocumentStatus, notes: '' });
   const [saving, setSaving] = useState(false);
 
   async function loadDocs() {
     setLoadingDocs(true);
-    try {
-      setAllDocs(await getAllDocuments());
-    } finally {
-      setLoadingDocs(false);
-    }
+    try { setAllDocs(await getAllDocuments()); }
+    finally { setLoadingDocs(false); }
   }
 
   useEffect(() => { loadDocs(); }, []);
@@ -64,84 +61,60 @@ export default function AdminDocumentacionPage() {
 
   const semaphoreByCommerce = useMemo(() => {
     const map: Record<string, Semaphore> = {};
-    commerces.forEach(c => {
-      map[c.id] = getDocumentSemaphore(docsByCommerce[c.id] ?? []);
-    });
+    commerces.forEach(c => { map[c.id] = getDocumentSemaphore(docsByCommerce[c.id] ?? []); });
     return map;
   }, [commerces, docsByCommerce]);
-
-  async function handleAddDoc(commerceId: string, commerceName: string) {
-    if (!usuario) return;
-    setSaving(true);
-    try {
-      await createDocument({
-        commerceId,
-        type: newDocForm.type,
-        notes: newDocForm.notes || undefined,
-        expiresAt: newDocForm.expiresAt || undefined,
-        status: 'pendiente',
-        uploadedBy: usuario.uid,
-      });
-      toast.success(`Requisito "${newDocForm.type}" agregado.`);
-      setAddingFor(null);
-      setNewDocForm({ type: DOCUMENT_TYPES[0], notes: '', expiresAt: '' });
-      loadDocs();
-    } catch {
-      toast.error('No se pudo agregar el requisito.');
-    } finally {
-      setSaving(false);
-    }
-  }
 
   async function handleReview() {
     if (!reviewModal) return;
     setSaving(true);
     try {
-      await updateDocument(reviewModal.doc.id, {
-        status: reviewForm.status,
-        notes: reviewForm.notes || undefined,
-      });
+      await updateDocument(reviewModal.doc.id, { status: reviewForm.status, notes: reviewForm.notes || undefined });
       toast.success('Estado actualizado.');
       setReviewModal(null);
       loadDocs();
-    } catch {
-      toast.error('No se pudo actualizar.');
-    } finally {
-      setSaving(false);
-    }
+    } catch { toast.error('No se pudo actualizar.'); }
+    finally { setSaving(false); }
   }
 
   const loading = loadingCommerces || loadingDocs;
+
+  // Summary counts
+  const semaphoreCounts = useMemo(() => {
+    const counts = { verde: 0, amarillo: 0, rojo: 0 };
+    commerces.forEach(c => { counts[semaphoreByCommerce[c.id] ?? 'rojo']++; });
+    return counts;
+  }, [commerces, semaphoreByCommerce]);
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-slate-900">Legajo documental</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Estado de la documentación por local</p>
+          <p className="text-sm text-slate-500 mt-0.5">Documentación requerida por rubro para cada local</p>
         </div>
-        <button
-          onClick={() => { refreshCommerces(); loadDocs(); }}
-          className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
-        >
+        <button onClick={() => { refreshCommerces(); loadDocs(); }}
+          className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">
           <RefreshCw className="w-4 h-4" />
         </button>
       </div>
 
       {/* Summary pills */}
       {!loading && (
-        <div className="flex gap-3 mb-6">
-          {(['verde', 'amarillo', 'rojo'] as Semaphore[]).map(s => {
-            const count = commerces.filter(c => semaphoreByCommerce[c.id] === s).length;
-            const conf = SEMAPHORE_CONFIG[s];
-            return (
-              <div key={s} className="flex items-center gap-2 bg-white border border-slate-100 rounded-xl px-4 py-2.5 shadow-sm">
-                <span className={`w-2.5 h-2.5 rounded-full ${conf.dot}`} />
-                <span className="text-sm font-semibold text-slate-700">{count}</span>
-                <span className="text-xs text-slate-500">{conf.label}</span>
+        <div className="grid grid-cols-3 gap-3 mb-6">
+          {([
+            { key: 'verde', icon: CheckCircle, label: 'Al día', textColor: 'text-emerald-700' },
+            { key: 'amarillo', icon: Circle, label: 'En revisión', textColor: 'text-amber-700' },
+            { key: 'rojo', icon: XCircle, label: 'Requiere atención', textColor: 'text-red-700' },
+          ] as const).map(({ key, icon: Icon, label, textColor }) => (
+            <div key={key} className="bg-white border border-slate-100 rounded-2xl shadow-sm p-4 flex items-center gap-3">
+              <span className={`w-3 h-3 rounded-full shrink-0 ${SEMAPHORE_CONFIG[key].dot}`} />
+              <div>
+                <div className={`text-2xl font-bold ${textColor}`}>{semaphoreCounts[key]}</div>
+                <div className="text-xs text-slate-500">{label}</div>
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
       )}
 
@@ -151,163 +124,195 @@ export default function AdminDocumentacionPage() {
         </div>
       ) : (
         <div className="space-y-2">
-          {commerces.map(commerce => {
-            const semaphore = semaphoreByCommerce[commerce.id];
-            const sConf = SEMAPHORE_CONFIG[semaphore];
-            const docs = docsByCommerce[commerce.id] ?? [];
-            const isOpen = expanded === commerce.id;
-            const isAdding = addingFor === commerce.id;
-
-            return (
-              <div key={commerce.id} className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-                <button
-                  className="w-full flex items-center gap-4 px-5 py-4 text-left"
-                  onClick={() => setExpanded(isOpen ? null : commerce.id)}
-                >
-                  <span className={`w-3 h-3 rounded-full shrink-0 ${sConf.dot}`} title={sConf.label} />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-slate-900 truncate">{commerce.name}</p>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      {commerce.locationCode ?? '—'} · {docs.length} documento{docs.length !== 1 ? 's' : ''}
-                      {docs.some(d => isExpiringSoon(d.expiresAt)) && (
-                        <span className="ml-2 text-amber-600 font-medium">· Próximo a vencer</span>
-                      )}
-                    </p>
-                  </div>
-                  {isOpen ? <ChevronUp className="w-4 h-4 text-slate-400 shrink-0" /> : <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />}
-                </button>
-
-                {isOpen && (
-                  <div className="border-t border-slate-100 px-5 pb-5">
-                    {docs.length > 0 ? (
-                      <table className="w-full text-sm mt-4">
-                        <thead>
-                          <tr className="text-xs text-slate-500 uppercase tracking-wider text-left">
-                            <th className="pb-2 font-semibold">Documento</th>
-                            <th className="pb-2 font-semibold">Estado</th>
-                            <th className="pb-2 font-semibold hidden md:table-cell">Vencimiento</th>
-                            <th className="pb-2 font-semibold hidden lg:table-cell">Notas</th>
-                            <th className="pb-2" />
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-50">
-                          {docs.map(d => (
-                            <tr key={d.id} className="hover:bg-slate-50">
-                              <td className="py-3 pr-4">
-                                <div className="flex items-center gap-2">
-                                  <FileText className="w-4 h-4 text-slate-400 shrink-0" />
-                                  <span className="font-medium text-slate-800">{d.type}</span>
-                                  {d.fileUrl && (
-                                    <a href={d.fileUrl} target="_blank" rel="noopener noreferrer" className="text-amber-500 hover:text-amber-600">
-                                      <ExternalLink className="w-3.5 h-3.5" />
-                                    </a>
-                                  )}
-                                </div>
-                              </td>
-                              <td className="py-3 pr-4">
-                                <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${STATUS_CONFIG[d.status].color}`}>
-                                  {STATUS_CONFIG[d.status].label}
-                                </span>
-                                {isExpiringSoon(d.expiresAt) && (
-                                  <AlertTriangle className="inline w-3.5 h-3.5 text-amber-500 ml-1.5" />
-                                )}
-                              </td>
-                              <td className="py-3 pr-4 text-slate-500 text-xs hidden md:table-cell">
-                                {d.expiresAt
-                                  ? new Date(d.expiresAt).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' })
-                                  : '—'}
-                              </td>
-                              <td className="py-3 pr-4 text-slate-400 text-xs hidden lg:table-cell max-w-[160px] truncate">
-                                {d.notes ?? '—'}
-                              </td>
-                              <td className="py-3 text-right">
-                                {(d.status === 'presentado') && (
-                                  <button
-                                    onClick={() => {
-                                      setReviewModal({ doc: d });
-                                      setReviewForm({ status: 'aprobado', notes: '' });
-                                    }}
-                                    className="text-xs font-medium text-amber-600 hover:text-amber-700 border border-amber-200 px-2.5 py-1 rounded-lg"
-                                  >
-                                    Revisar
-                                  </button>
-                                )}
-                                {(d.status === 'aprobado' || d.status === 'observado' || d.status === 'vencido') && (
-                                  <button
-                                    onClick={() => {
-                                      setReviewModal({ doc: d });
-                                      setReviewForm({ status: d.status, notes: d.notes ?? '' });
-                                    }}
-                                    className="text-xs text-slate-400 hover:text-slate-600"
-                                  >
-                                    Editar
-                                  </button>
-                                )}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    ) : (
-                      <p className="text-sm text-slate-400 mt-4 mb-2">Sin documentos cargados.</p>
-                    )}
-
-                    {/* Add requirement */}
-                    {isAdding ? (
-                      <div className="mt-4 border border-amber-200 bg-amber-50/50 rounded-xl p-4">
-                        <div className="flex items-center justify-between mb-3">
-                          <p className="text-sm font-semibold text-slate-800">Agregar requisito</p>
-                          <button onClick={() => setAddingFor(null)} className="text-slate-400 hover:text-slate-600">
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3 mb-3">
-                          <div>
-                            <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1 block">Tipo *</label>
-                            <select className={inputCls} value={newDocForm.type} onChange={e => setNewDocForm(f => ({ ...f, type: e.target.value }))}>
-                              {DOCUMENT_TYPES.map(t => <option key={t}>{t}</option>)}
-                            </select>
-                          </div>
-                          <div>
-                            <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1 block">Vencimiento</label>
-                            <input type="date" className={inputCls} value={newDocForm.expiresAt} onChange={e => setNewDocForm(f => ({ ...f, expiresAt: e.target.value }))} />
-                          </div>
-                        </div>
-                        <div className="mb-3">
-                          <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1 block">Nota para el comercio</label>
-                          <input type="text" className={inputCls} placeholder="Ej: Presentar habilitación vigente 2025" value={newDocForm.notes} onChange={e => setNewDocForm(f => ({ ...f, notes: e.target.value }))} />
-                        </div>
-                        <div className="flex justify-end gap-2">
-                          <button onClick={() => setAddingFor(null)} className="text-sm text-slate-500 hover:text-slate-700 px-3 py-1.5">Cancelar</button>
-                          <button
-                            onClick={() => handleAddDoc(commerce.id, commerce.name)}
-                            disabled={saving}
-                            className="text-sm font-semibold bg-amber-500 hover:bg-amber-400 text-slate-900 px-4 py-1.5 rounded-lg disabled:opacity-60"
-                          >
-                            {saving ? 'Guardando...' : 'Agregar'}
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => setAddingFor(commerce.id)}
-                        className="mt-4 inline-flex items-center gap-1.5 text-xs font-medium text-amber-600 hover:text-amber-700"
-                      >
-                        <Plus className="w-3.5 h-3.5" /> Agregar requisito
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-
           {commerces.length === 0 && (
             <div className="text-center py-16 bg-white rounded-2xl border border-slate-100">
               <FileText className="w-10 h-10 text-slate-300 mx-auto mb-3" />
               <p className="text-slate-500 text-sm">No hay comercios registrados aún.</p>
             </div>
           )}
+
+          {commerces.map(commerce => {
+            const semaphore = semaphoreByCommerce[commerce.id];
+            const sConf = SEMAPHORE_CONFIG[semaphore];
+            const docs = docsByCommerce[commerce.id] ?? [];
+            const isOpen = expanded === commerce.id;
+
+            // Business model & template for this commerce
+            const model = getBusinessModel(commerce.category);
+            const modelConfig = MODEL_CONFIGS[model];
+            const templates = getTemplateForModel(model);
+            const requiredTemplates = templates.filter(t => t.required);
+            const docsByType: Record<string, CommercDocument> = Object.fromEntries(docs.map(d => [d.type, d]));
+
+            // Progress: required docs approved
+            const approvedRequired = requiredTemplates.filter(t => docsByType[t.type]?.status === 'aprobado').length;
+            const progress = requiredTemplates.length > 0 ? Math.round((approvedRequired / requiredTemplates.length) * 100) : 0;
+
+            // Docs submitted/pending review
+            const pendingReview = docs.filter(d => d.status === 'presentado').length;
+
+            return (
+              <div key={commerce.id} className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+                {/* Commerce header */}
+                <button
+                  className="w-full flex items-center gap-4 px-5 py-4 text-left hover:bg-slate-50 transition-colors"
+                  onClick={() => setExpanded(isOpen ? null : commerce.id)}
+                >
+                  <span className={`w-3 h-3 rounded-full shrink-0 ${sConf.dot}`} title={sConf.label} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-semibold text-slate-900 truncate">{commerce.name}</p>
+                      <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full flex items-center gap-1">
+                        {modelConfig.emoji} {commerce.category}
+                      </span>
+                      {pendingReview > 0 && (
+                        <span className="text-xs font-semibold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">
+                          {pendingReview} para revisar
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 mt-1">
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-24 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${progress === 100 ? 'bg-emerald-500' : progress >= 50 ? 'bg-amber-500' : 'bg-red-400'}`}
+                            style={{ width: `${progress}%` }}
+                          />
+                        </div>
+                        <span className="text-xs text-slate-400">{approvedRequired}/{requiredTemplates.length}</span>
+                      </div>
+                      {docs.some(d => isExpiringSoon(d.expiresAt)) && (
+                        <span className="text-xs text-amber-600 font-medium flex items-center gap-1">
+                          <AlertTriangle className="w-3 h-3" /> Por vencer
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {isOpen ? <ChevronUp className="w-4 h-4 text-slate-400 shrink-0" /> : <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />}
+                </button>
+
+                {/* Expanded: template-based document list */}
+                {isOpen && (
+                  <div className="border-t border-slate-100 p-5 space-y-5">
+                    {/* Required docs */}
+                    <div>
+                      <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
+                        Documentos obligatorios · {modelConfig.emoji} {commerce.category}
+                      </p>
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-xs text-slate-400 uppercase tracking-wider text-left">
+                            <th className="pb-2 font-medium">Documento</th>
+                            <th className="pb-2 font-medium">Estado</th>
+                            <th className="pb-2 font-medium hidden md:table-cell">Vencimiento</th>
+                            <th className="pb-2" />
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50">
+                          {requiredTemplates.map(template => {
+                            const d = docsByType[template.type];
+                            const status: DocumentStatus = d?.status ?? 'pendiente';
+                            return (
+                              <tr key={template.type} className="hover:bg-slate-50">
+                                <td className="py-2.5 pr-4">
+                                  <div className="flex items-center gap-2">
+                                    <FileText className={`w-3.5 h-3.5 shrink-0 ${status === 'aprobado' ? 'text-emerald-500' : status === 'presentado' ? 'text-blue-500' : 'text-slate-300'}`} />
+                                    <div>
+                                      <span className="font-medium text-slate-800 text-sm">{template.label}</span>
+                                      {d?.fileUrl && (
+                                        <a href={d.fileUrl} target="_blank" rel="noopener noreferrer" className="ml-2 text-amber-500 hover:text-amber-600 inline-flex items-center gap-0.5">
+                                          <ExternalLink className="w-3 h-3" />
+                                        </a>
+                                      )}
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="py-2.5 pr-4">
+                                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${STATUS_CONFIG[status].color}`}>
+                                    {STATUS_CONFIG[status].label}
+                                  </span>
+                                </td>
+                                <td className="py-2.5 pr-4 text-slate-400 text-xs hidden md:table-cell">
+                                  {d?.expiresAt
+                                    ? <span className={isExpiringSoon(d.expiresAt) ? 'text-amber-600 font-medium' : ''}>
+                                        {new Date(d.expiresAt).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                      </span>
+                                    : '—'}
+                                </td>
+                                <td className="py-2.5 text-right">
+                                  {d && (d.status === 'presentado' || d.status === 'aprobado' || d.status === 'observado' || d.status === 'vencido') && (
+                                    <button
+                                      onClick={() => { setReviewModal({ doc: d }); setReviewForm({ status: d.status, notes: d.notes ?? '' }); }}
+                                      className={`text-xs font-medium px-2.5 py-1 rounded-lg border transition-colors ${
+                                        d.status === 'presentado'
+                                          ? 'text-amber-600 border-amber-200 hover:bg-amber-50'
+                                          : 'text-slate-400 border-slate-200 hover:text-slate-600'
+                                      }`}
+                                    >
+                                      {d.status === 'presentado' ? 'Revisar' : 'Editar'}
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Optional docs and extras */}
+                    {(templates.filter(t => !t.required).length > 0 || docs.filter(d => !templates.some(t => t.type === d.type)).length > 0) && (
+                      <div>
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Opcionales y adicionales</p>
+                        <table className="w-full text-sm">
+                          <tbody className="divide-y divide-slate-50">
+                            {[
+                              ...templates.filter(t => !t.required),
+                              ...docs.filter(d => !templates.some(t => t.type === d.type))
+                                .map(d => ({ type: d.type, label: d.type, required: false })),
+                            ].map(template => {
+                              const d = docsByType[template.type];
+                              const status: DocumentStatus = d?.status ?? 'pendiente';
+                              return (
+                                <tr key={template.type} className="hover:bg-slate-50">
+                                  <td className="py-2.5 pr-4">
+                                    <div className="flex items-center gap-2">
+                                      <FileText className="w-3.5 h-3.5 text-slate-300 shrink-0" />
+                                      <span className="text-slate-600 text-sm">{template.label}</span>
+                                      {d?.fileUrl && (
+                                        <a href={d.fileUrl} target="_blank" rel="noopener noreferrer" className="ml-1 text-amber-500 hover:text-amber-600">
+                                          <ExternalLink className="w-3 h-3" />
+                                        </a>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="py-2.5 pr-4">
+                                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${STATUS_CONFIG[status].color}`}>
+                                      {STATUS_CONFIG[status].label}
+                                    </span>
+                                  </td>
+                                  <td className="py-2.5 text-right">
+                                    {d && d.status !== 'pendiente' && (
+                                      <button
+                                        onClick={() => { setReviewModal({ doc: d }); setReviewForm({ status: d.status, notes: d.notes ?? '' }); }}
+                                        className="text-xs text-slate-400 hover:text-slate-600 border border-slate-200 px-2.5 py-1 rounded-lg"
+                                      >
+                                        {d.status === 'presentado' ? 'Revisar' : 'Editar'}
+                                      </button>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -321,26 +326,17 @@ export default function AdminDocumentacionPage() {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <p className="text-sm text-slate-600 mb-4">
-              <span className="font-medium">{reviewModal.doc.type}</span>
-            </p>
+            <p className="text-sm text-slate-600 mb-4 font-medium">{reviewModal.doc.type}</p>
             {reviewModal.doc.fileUrl && (
-              <a
-                href={reviewModal.doc.fileUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 text-sm text-amber-600 hover:text-amber-700 mb-4"
-              >
-                <ExternalLink className="w-4 h-4" /> Ver documento
+              <a href={reviewModal.doc.fileUrl} target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-2 text-sm text-amber-600 hover:text-amber-700 mb-4">
+                <ExternalLink className="w-4 h-4" /> Ver documento adjunto
               </a>
             )}
             <div className="mb-3">
               <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5 block">Nuevo estado</label>
-              <select
-                className={inputCls}
-                value={reviewForm.status}
-                onChange={e => setReviewForm(f => ({ ...f, status: e.target.value as DocumentStatus }))}
-              >
+              <select className={inputCls} value={reviewForm.status}
+                onChange={e => setReviewForm(f => ({ ...f, status: e.target.value as DocumentStatus }))}>
                 <option value="aprobado">Aprobado</option>
                 <option value="observado">Observado</option>
                 <option value="vencido">Vencido</option>
@@ -349,21 +345,13 @@ export default function AdminDocumentacionPage() {
             </div>
             <div className="mb-5">
               <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5 block">Nota (visible al comercio)</label>
-              <textarea
-                rows={3}
-                className={inputCls}
-                placeholder="Ej: Falta firma del titular."
-                value={reviewForm.notes}
-                onChange={e => setReviewForm(f => ({ ...f, notes: e.target.value }))}
-              />
+              <textarea rows={3} className={inputCls} placeholder="Ej: Falta firma del titular."
+                value={reviewForm.notes} onChange={e => setReviewForm(f => ({ ...f, notes: e.target.value }))} />
             </div>
             <div className="flex justify-end gap-3">
               <button onClick={() => setReviewModal(null)} className="text-sm text-slate-500 hover:text-slate-700 px-4 py-2">Cancelar</button>
-              <button
-                onClick={handleReview}
-                disabled={saving}
-                className="px-5 py-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-60 text-slate-900 font-bold rounded-xl text-sm"
-              >
+              <button onClick={handleReview} disabled={saving}
+                className="px-5 py-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-60 text-slate-900 font-bold rounded-xl text-sm">
                 {saving ? 'Guardando...' : 'Confirmar'}
               </button>
             </div>
