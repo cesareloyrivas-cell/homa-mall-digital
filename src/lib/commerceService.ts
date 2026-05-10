@@ -1,5 +1,5 @@
 import {
-  collection, doc, addDoc, updateDoc, getDoc, getDocs, serverTimestamp,
+  collection, doc, addDoc, updateDoc, getDoc, getDocs, deleteDoc, serverTimestamp,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { Commerce } from '@/types';
@@ -47,6 +47,10 @@ export async function createCommerce(
     updatedAt: serverTimestamp(),
   });
   return ref.id;
+}
+
+export async function deleteCommerce(id: string): Promise<void> {
+  await deleteDoc(doc(db, COLL, id));
 }
 
 export async function updateCommerce(

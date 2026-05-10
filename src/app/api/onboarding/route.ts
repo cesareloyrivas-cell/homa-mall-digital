@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
-import { Resend } from 'resend';
 import { FieldValue } from 'firebase-admin/firestore';
+import nodemailer from 'nodemailer';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-const FROM = process.env.RESEND_FROM_EMAIL ?? 'onboarding@resend.dev';
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.GMAIL_USER,
+    pass: process.env.GMAIL_APP_PASSWORD,
+  },
+});
 
 export async function POST(req: NextRequest) {
   try {
@@ -45,9 +50,9 @@ export async function POST(req: NextRequest) {
       url: `${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'}/login`,
     });
 
-    // 4. Enviar email de onboarding
-    await resend.emails.send({
-      from: FROM,
+    // 4. Enviar email con Nodemailer + Gmail
+    await transporter.sendMail({
+      from: `"HOMA Mall" <${process.env.GMAIL_USER}>`,
       to: email,
       subject: `¡Bienvenido a HOMA Mall! Activá tu acceso — ${commerceName}`,
       html: onboardingEmailHtml({ email, commerceName, resetLink }),
@@ -137,17 +142,15 @@ function onboardingEmailHtml({
               </table>
 
               <p style="margin:0 0 24px;font-size:14px;color:#94a3b8;line-height:1.6;">
-                Si el botón no funciona, copiá y pegá este link en tu navegador:
-                <br/>
+                Si el botón no funciona, copiá y pegá este link en tu navegador:<br/>
                 <a href="${resetLink}" style="color:#f59e0b;word-break:break-all;font-size:13px;">${resetLink}</a>
               </p>
 
               <hr style="border:none;border-top:1px solid #e2e8f0;margin:32px 0;" />
 
               <p style="margin:0;font-size:14px;color:#94a3b8;line-height:1.6;">
-                Una vez que actives tu cuenta podrás acceder a tu panel en
-                <a href="${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'}/login" style="color:#f59e0b;">homamall.com.ar/login</a>,
-                editar la información de tu local, subir promociones y más.
+                Una vez que actives tu cuenta podés acceder desde
+                <a href="${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'}/login" style="color:#f59e0b;">homamall.com.ar/login</a>
               </p>
             </td>
           </tr>
@@ -156,9 +159,8 @@ function onboardingEmailHtml({
           <tr>
             <td style="background-color:#f8fafc;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 16px 16px;padding:24px 40px;text-align:center;">
               <p style="margin:0;font-size:12px;color:#94a3b8;">
-                © ${new Date().getFullYear()} HOMA Mall · Carlos Paz, Córdoba
-                <br/>
-                Si no esperabas este email, ignoralo.
+                © ${new Date().getFullYear()} HOMA Mall · Carlos Paz, Córdoba<br/>
+                Si no esperabas este email, podés ignorarlo.
               </p>
             </td>
           </tr>

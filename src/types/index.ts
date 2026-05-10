@@ -52,6 +52,7 @@ export interface AppUser {
   tenantId?: string;
   commerceId?: string;
   createdAt?: string;
+  isActive?: boolean;
 }
 
 // ─── Commerce ─────────────────────────────────────────────────────────────────

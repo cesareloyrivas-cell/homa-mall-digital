@@ -3,10 +3,12 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
-  Search, Plus, Store, AlertTriangle, CheckCircle, RefreshCw,
+  Search, Plus, Store, AlertTriangle, CheckCircle, RefreshCw, Trash2,
 } from 'lucide-react';
 import { PublicStatus } from '@/types';
 import { useCommerces } from '@/hooks/useCommerces';
+import { deleteCommerce } from '@/lib/commerceService';
+import toast from 'react-hot-toast';
 
 const STATUS_LABELS: Record<PublicStatus, { label: string; color: string }> = {
   destacado: { label: 'Destacado', color: 'text-amber-700 bg-amber-100' },
@@ -25,6 +27,8 @@ const DOC_STATUS = {
 export default function AdminComerciosPage() {
   const { commerces, loading, error, refresh } = useCommerces();
   const [search, setSearch] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const filtered = useMemo(
     () =>
@@ -37,6 +41,21 @@ export default function AdminComerciosPage() {
       ),
     [commerces, search]
   );
+
+  async function handleDelete() {
+    if (!confirmDelete) return;
+    setDeleting(true);
+    try {
+      await deleteCommerce(confirmDelete.id);
+      toast.success(`"${confirmDelete.name}" eliminado.`);
+      setConfirmDelete(null);
+      refresh();
+    } catch {
+      toast.error('No se pudo eliminar el comercio.');
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -91,37 +110,20 @@ export default function AdminComerciosPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50 text-left">
-                  <th className="px-5 py-3.5 font-semibold text-slate-600 text-xs uppercase tracking-wider">
-                    Comercio
-                  </th>
-                  <th className="px-4 py-3.5 font-semibold text-slate-600 text-xs uppercase tracking-wider hidden sm:table-cell">
-                    Rubro
-                  </th>
-                  <th className="px-4 py-3.5 font-semibold text-slate-600 text-xs uppercase tracking-wider hidden md:table-cell">
-                    Local
-                  </th>
-                  <th className="px-4 py-3.5 font-semibold text-slate-600 text-xs uppercase tracking-wider">
-                    Estado público
-                  </th>
-                  <th className="px-4 py-3.5 font-semibold text-slate-600 text-xs uppercase tracking-wider hidden lg:table-cell">
-                    Documentación
-                  </th>
-                  <th className="px-4 py-3.5 font-semibold text-slate-600 text-xs uppercase tracking-wider text-right">
-                    Acciones
-                  </th>
+                  <th className="px-5 py-3.5 font-semibold text-slate-600 text-xs uppercase tracking-wider">Comercio</th>
+                  <th className="px-4 py-3.5 font-semibold text-slate-600 text-xs uppercase tracking-wider hidden sm:table-cell">Rubro</th>
+                  <th className="px-4 py-3.5 font-semibold text-slate-600 text-xs uppercase tracking-wider hidden md:table-cell">Local</th>
+                  <th className="px-4 py-3.5 font-semibold text-slate-600 text-xs uppercase tracking-wider">Estado público</th>
+                  <th className="px-4 py-3.5 font-semibold text-slate-600 text-xs uppercase tracking-wider hidden lg:table-cell">Documentación</th>
+                  <th className="px-4 py-3.5 font-semibold text-slate-600 text-xs uppercase tracking-wider text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {filtered.map((c) => {
                   const status = STATUS_LABELS[c.publicStatus];
-                  const doc = DOC_STATUS[c.documentationStatus];
-                  const DocIcon = doc.icon;
-                  const initials = c.name
-                    .split(' ')
-                    .map((w) => w[0])
-                    .slice(0, 2)
-                    .join('')
-                    .toUpperCase();
+                  const docSt = DOC_STATUS[c.documentationStatus];
+                  const DocIcon = docSt.icon;
+                  const initials = c.name.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase();
                   return (
                     <tr key={c.id} className="hover:bg-slate-50 transition-colors">
                       <td className="px-5 py-4">
@@ -132,37 +134,40 @@ export default function AdminComerciosPage() {
                           <div>
                             <div className="font-medium text-slate-900">{c.name}</div>
                             {c.legalName && (
-                              <div className="text-xs text-slate-400 truncate max-w-[160px]">
-                                {c.legalName}
-                              </div>
+                              <div className="text-xs text-slate-400 truncate max-w-[160px]">{c.legalName}</div>
                             )}
                           </div>
                         </div>
                       </td>
                       <td className="px-4 py-4 text-slate-600 hidden sm:table-cell">{c.category}</td>
-                      <td className="px-4 py-4 text-slate-500 hidden md:table-cell">
-                        {c.locationCode ?? '—'}
-                      </td>
+                      <td className="px-4 py-4 text-slate-500 hidden md:table-cell">{c.locationCode ?? '—'}</td>
                       <td className="px-4 py-4">
-                        <span
-                          className={`inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-full ${status.color}`}
-                        >
+                        <span className={`inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-full ${status.color}`}>
                           {status.label}
                         </span>
                       </td>
                       <td className="px-4 py-4 hidden lg:table-cell">
-                        <div className={`flex items-center gap-1.5 text-xs font-medium ${doc.color}`}>
+                        <div className={`flex items-center gap-1.5 text-xs font-medium ${docSt.color}`}>
                           <DocIcon className="w-3.5 h-3.5" />
-                          {doc.label}
+                          {docSt.label}
                         </div>
                       </td>
                       <td className="px-4 py-4 text-right">
-                        <Link
-                          href={`/admin/comercios/${c.id}`}
-                          className="text-xs font-medium text-amber-600 hover:text-amber-700"
-                        >
-                          Editar →
-                        </Link>
+                        <div className="flex items-center justify-end gap-3">
+                          <Link
+                            href={`/admin/comercios/${c.id}`}
+                            className="text-xs font-medium text-amber-600 hover:text-amber-700"
+                          >
+                            Editar →
+                          </Link>
+                          <button
+                            onClick={() => setConfirmDelete({ id: c.id, name: c.name })}
+                            className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Eliminar"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -176,10 +181,7 @@ export default function AdminComerciosPage() {
                   {search ? `Sin resultados para "${search}"` : 'No hay comercios todavía.'}
                 </p>
                 {!search && (
-                  <Link
-                    href="/admin/comercios/nuevo"
-                    className="mt-3 inline-block text-sm font-medium text-amber-600 hover:text-amber-700"
-                  >
+                  <Link href="/admin/comercios/nuevo" className="mt-3 inline-block text-sm font-medium text-amber-600 hover:text-amber-700">
                     Crear el primero →
                   </Link>
                 )}
@@ -188,6 +190,37 @@ export default function AdminComerciosPage() {
           </div>
         )}
       </div>
+
+      {/* Modal de confirmación */}
+      {confirmDelete && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+            <div className="w-12 h-12 bg-red-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <Trash2 className="w-6 h-6 text-red-600" />
+            </div>
+            <h3 className="text-lg font-bold text-slate-900 text-center mb-1">¿Eliminar comercio?</h3>
+            <p className="text-sm text-slate-500 text-center mb-6">
+              Vas a eliminar <span className="font-semibold text-slate-900">"{confirmDelete.name}"</span>. Esta acción no se puede deshacer.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmDelete(null)}
+                disabled={deleting}
+                className="flex-1 px-4 py-2.5 border border-slate-200 text-slate-700 font-semibold rounded-xl text-sm hover:bg-slate-50 transition-colors disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="flex-1 px-4 py-2.5 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-xl text-sm transition-colors disabled:opacity-50"
+              >
+                {deleting ? 'Eliminando...' : 'Eliminar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

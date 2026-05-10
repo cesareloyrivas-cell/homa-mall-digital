@@ -8,15 +8,88 @@ import { CommercDocument, DocumentStatus } from '@/types';
 const TENANT_ID = process.env.NEXT_PUBLIC_DEFAULT_TENANT_ID ?? 'homa_mall';
 const COLL = 'legajos';
 
-export const DOCUMENT_TYPES = [
+// Base documents required for ALL commerces
+export const DOCUMENT_TYPES_BASE = [
   'Habilitación municipal',
-  'Certificado de bomberos',
-  'Seguro de responsabilidad civil',
-  'Habilitación bromatológica',
   'Inscripción impositiva (AFIP)',
   'Contrato de locación',
   'Reglamento de convivencia',
+  'Certificado de bomberos',
   'Otro',
+];
+
+// Additional documents by business model category
+export const DOCUMENT_TYPES_BY_CATEGORY: Record<string, string[]> = {
+  gastronomia: [
+    'Habilitación bromatológica',
+    'Carnet de manipulador de alimentos',
+    'Libreta sanitaria del personal',
+    'Plan de análisis de peligros (HACCP)',
+    'Registro de libro de inspecciones',
+  ],
+  salud_estetica: [
+    'Habilitación sanitaria',
+    'Título/matrícula profesional',
+    'Registro de productos cosméticos (ANMAT)',
+    'Libro de inspecciones sanitarias',
+  ],
+  entretenimiento: [
+    'Habilitación de esparcimiento',
+    'Certificado de capacidad máxima',
+    'Seguro de accidentes a terceros',
+    'Plan de evacuación aprobado',
+  ],
+  tecnologia: [
+    'Garantía de servicio técnico',
+    'Registro de importador (si aplica)',
+  ],
+  indumentaria: [
+    'Registro de habilitación comercial',
+  ],
+  productos: [
+    'Permiso de expendio',
+    'Registro de proveedor habilitado',
+  ],
+  servicios_profesionales: [
+    'Matrícula o habilitación profesional',
+    'Seguro de mala praxis (si aplica)',
+  ],
+};
+
+export function getDocumentTypesForCategory(category: string): string[] {
+  // Dynamic import avoided — use direct mapping
+  const modelMap: Record<string, string> = {
+    'Gastronomía': 'gastronomia',
+    'Indumentaria': 'indumentaria',
+    'Calzado': 'indumentaria',
+    'Joyería y Accesorios': 'indumentaria',
+    'Salud y Bienestar': 'salud_estetica',
+    'Belleza y Estética': 'salud_estetica',
+    'Farmacia': 'salud_estetica',
+    'Tecnología': 'tecnologia',
+    'Entretenimiento': 'entretenimiento',
+    'Servicios': 'servicios_profesionales',
+    'Librería y Papelería': 'servicios_profesionales',
+    'Hogar y Deco': 'productos',
+    'Supermercado': 'productos',
+    'Deportes': 'productos',
+  };
+  const model = modelMap[category];
+  const extra = model ? (DOCUMENT_TYPES_BY_CATEGORY[model] ?? []) : [];
+  return [...DOCUMENT_TYPES_BASE, ...extra];
+}
+
+// Legacy flat list (used in admin add-requirement dropdown)
+export const DOCUMENT_TYPES = [
+  ...DOCUMENT_TYPES_BASE,
+  'Habilitación bromatológica',
+  'Carnet de manipulador de alimentos',
+  'Libreta sanitaria del personal',
+  'Habilitación sanitaria',
+  'Título/matrícula profesional',
+  'Habilitación de esparcimiento',
+  'Certificado de capacidad máxima',
+  'Matrícula o habilitación profesional',
 ];
 
 export async function getDocumentsByCommerce(commerceId: string): Promise<CommercDocument[]> {
