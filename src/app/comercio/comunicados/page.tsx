@@ -2,102 +2,128 @@
 
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { getCommunicationsForCommerce, getReadsByCommerce, markAsRead, markAsConfirmed } from '@/lib/communicationService';
-import { getCommerces } from '@/lib/commerceService';
-import { Communication, CommunicationPriority, CommunicationRead } from '@/types';
+import { useCommerce } from '@/hooks/useCommerce';
+import { getComunicadosForCommerce } from '@/lib/comunicadoService';
+import { Communication } from '@/types';
 import {
-  Megaphone, Info, Bell, AlertTriangle, AlertCircle, ChevronDown, ChevronUp, CheckCircle2,
+  Megaphone, Bell, AlertTriangle, RefreshCw, ChevronDown, ChevronUp,
 } from 'lucide-react';
-import toast from 'react-hot-toast';
 
-const PRIORITY_CONFIG: Record<CommunicationPriority, { label: string; border: string; bg: string; badge: string; icon: typeof Info }> = {
-  baja: { label: 'Baja', border: 'border-slate-200', bg: 'bg-white', badge: 'bg-slate-100 text-slate-600', icon: Info },
-  media: { label: 'Media', border: 'border-blue-200', bg: 'bg-white', badge: 'bg-blue-100 text-blue-700', icon: Bell },
-  alta: { label: 'Alta', border: 'border-amber-200', bg: 'bg-amber-50/30', badge: 'bg-amber-100 text-amber-700', icon: AlertTriangle },
-  critica: { label: 'Crítica', border: 'border-red-200', bg: 'bg-red-50/30', badge: 'bg-red-100 text-red-700', icon: AlertCircle },
+const PRIORITY_CONFIG = {
+  baja: {
+    label: 'Info',
+    badgeColor: 'text-slate-600 bg-slate-100',
+    borderLeft: 'border-l-slate-300',
+  },
+  media: {
+    label: 'Aviso',
+    badgeColor: 'text-blue-700 bg-blue-100',
+    borderLeft: 'border-l-blue-400',
+  },
+  alta: {
+    label: 'Importante',
+    badgeColor: 'text-amber-700 bg-amber-100',
+    borderLeft: 'border-l-amber-400',
+  },
+  critica: {
+    label: 'Urgente',
+    badgeColor: 'text-red-700 bg-red-100',
+    borderLeft: 'border-l-red-500',
+  },
 };
+
+function isNew(publishedAt?: string) {
+  if (!publishedAt) return false;
+  return Date.now() - new Date(publishedAt).getTime() < 7 * 24 * 60 * 60 * 1000;
+}
+
+function formatDate(iso?: string) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleDateString('es-AR', {
+    day: 'numeric', month: 'long', year: 'numeric',
+  });
+}
+
+// ─── Tarjeta de un comunicado ─────────────────────────────────────────────────
+
+function ComunicadoCard({ c }: { c: Communication }) {
+  const [expanded, setExpanded] = useState(false);
+  const conf = PRIORITY_CONFIG[c.priority as keyof typeof PRIORITY_CONFIG] ?? PRIORITY_CONFIG.media;
+  const nuevo = isNew(c.publishedAt);
+  const isLong = c.body.length > 220;
+
+  return (
+    <div className={`bg-white rounded-2xl border border-slate-100 shadow-sm border-l-4 ${conf.borderLeft}`}>
+      <div className="p-5">
+        {/* Badges */}
+        <div className="flex flex-wrap items-center gap-2 mb-2">
+          <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${conf.badgeColor}`}>
+            {conf.label}
+          </span>
+          {nuevo && (
+            <span className="text-xs font-bold text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full">
+              Nuevo
+            </span>
+          )}
+          <span className="text-xs text-slate-400 ml-auto">
+            {formatDate(c.publishedAt)}
+          </span>
+        </div>
+
+        {/* Título */}
+        <h3 className="font-semibold text-slate-900 text-sm mb-2">{c.title}</h3>
+
+        {/* Cuerpo (colapsable si es largo) */}
+        <p className={`text-sm text-slate-600 leading-relaxed whitespace-pre-line ${
+          !expanded && isLong ? 'line-clamp-3' : ''
+        }`}>
+          {c.body}
+        </p>
+
+        {isLong && (
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="mt-2 text-xs text-amber-600 hover:text-amber-700 font-medium flex items-center gap-1 transition-colors"
+          >
+            {expanded
+              ? <><ChevronUp className="w-3 h-3" /> Ver menos</>
+              : <><ChevronDown className="w-3 h-3" /> Ver más</>}
+          </button>
+        )}
+
+        {/* Fecha de expiración */}
+        {c.expiresAt && (
+          <p className="mt-2.5 text-xs text-slate-400 flex items-center gap-1">
+            <AlertTriangle className="w-3 h-3" />
+            Vigente hasta: {formatDate(c.expiresAt)}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Página principal ─────────────────────────────────────────────────────────
 
 export default function ComercioComunicadosPage() {
   const { usuario } = useAuth();
-  const [comms, setComms] = useState<Communication[]>([]);
-  const [reads, setReads] = useState<CommunicationRead[]>([]);
+  const { commerce } = useCommerce();
+  const [comunicados, setComunicados] = useState<Communication[]>([]);
   const [loading, setLoading] = useState(true);
-  const [expanded, setExpanded] = useState<string | null>(null);
-  const [confirming, setConfirming] = useState<string | null>(null);
 
   const commerceId = usuario?.commerceId ?? '';
 
-  useEffect(() => {
+  async function load() {
     if (!commerceId) { setLoading(false); return; }
-
-    async function load() {
-      try {
-        const [allCommerces, myReads] = await Promise.all([
-          getCommerces(),
-          getReadsByCommerce(commerceId),
-        ]);
-        const mine = allCommerces.find(c => c.id === commerceId);
-        const hasIncompleteDocs = mine?.documentationStatus !== 'completa';
-
-        const myComms = await getCommunicationsForCommerce(commerceId, {
-          category: mine?.category,
-          hasIncompleteDocs,
-        });
-
-        setComms(myComms);
-        setReads(myReads);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    load();
-  }, [commerceId]);
-
-  function getRead(commId: string) {
-    return reads.find(r => r.communicationId === commId);
-  }
-
-  async function handleOpen(comm: Communication) {
-    const isOpen = expanded === comm.id;
-    setExpanded(isOpen ? null : comm.id);
-
-    if (!isOpen && !getRead(comm.id)?.readAt && usuario && commerceId) {
-      try {
-        await markAsRead(comm.id, commerceId, usuario.uid);
-        setReads(prev => {
-          const existing = prev.find(r => r.communicationId === comm.id);
-          if (existing) return prev.map(r => r.communicationId === comm.id ? { ...r, readAt: new Date().toISOString() } : r);
-          return [...prev, {
-            id: `${comm.id}_${commerceId}`,
-            communicationId: comm.id,
-            commerceId,
-            userId: usuario.uid,
-            tenantId: 'homa_mall',
-            readAt: new Date().toISOString(),
-          }];
-        });
-      } catch { /* silent */ }
-    }
-  }
-
-  async function handleConfirm(comm: Communication) {
-    if (!usuario || !commerceId) return;
-    setConfirming(comm.id);
+    setLoading(true);
     try {
-      await markAsConfirmed(comm.id, commerceId, usuario.uid);
-      setReads(prev => prev.map(r =>
-        r.communicationId === comm.id ? { ...r, confirmedAt: new Date().toISOString() } : r
-      ));
-      toast.success('Lectura confirmada.');
-    } catch {
-      toast.error('No se pudo confirmar.');
+      setComunicados(await getComunicadosForCommerce(commerceId, commerce?.category));
     } finally {
-      setConfirming(null);
+      setLoading(false);
     }
   }
 
-  const unreadCount = comms.filter(c => !getRead(c.id)?.readAt).length;
+  useEffect(() => { load(); }, [commerceId, commerce?.category]);
 
   if (!commerceId) {
     return (
@@ -107,107 +133,92 @@ export default function ComercioComunicadosPage() {
     );
   }
 
+  // Separar por prioridad y novedad
+  const criticas   = comunicados.filter((c) => c.priority === 'critica');
+  const rest       = comunicados.filter((c) => c.priority !== 'critica');
+  const nuevos     = rest.filter((c) => isNew(c.publishedAt));
+  const anteriores = rest.filter((c) => !isNew(c.publishedAt));
+
+  const totalNuevos = comunicados.filter((c) => isNew(c.publishedAt)).length;
+
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-slate-900">Comunicados</h1>
-        <p className="text-sm text-slate-500 mt-0.5">
-          {unreadCount > 0
-            ? `${unreadCount} comunicado${unreadCount > 1 ? 's' : ''} sin leer`
-            : 'Todo al día'}
-        </p>
+    <div className="p-6 max-w-3xl mx-auto">
+
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+            <Megaphone className="w-5 h-5 text-amber-500" />
+            Comunicados
+          </h1>
+          <p className="text-sm text-slate-500 mt-0.5">
+            {!loading && totalNuevos > 0
+              ? `${totalNuevos} comunicado${totalNuevos > 1 ? 's' : ''} nuevo${totalNuevos > 1 ? 's' : ''} esta semana`
+              : 'Avisos y novedades del mall para tu local.'}
+          </p>
+        </div>
+        <button
+          onClick={load}
+          className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+        >
+          <RefreshCw className="w-4 h-4" />
+        </button>
       </div>
 
+      {/* Content */}
       {loading ? (
         <div className="space-y-3">
-          {[1, 2, 3].map(i => <div key={i} className="h-20 bg-slate-100 rounded-2xl animate-pulse" />)}
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-28 bg-slate-100 rounded-2xl animate-pulse" />
+          ))}
         </div>
-      ) : comms.length === 0 ? (
-        <div className="text-center py-20 bg-white rounded-2xl border border-slate-100">
-          <Megaphone className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-          <p className="text-slate-500 font-medium">No hay comunicados por ahora.</p>
-          <p className="text-slate-400 text-sm mt-1">Cuando la administración envíe un aviso, aparecerá aquí.</p>
+      ) : comunicados.length === 0 ? (
+        <div className="text-center py-20 text-slate-400">
+          <Bell className="w-12 h-12 mx-auto mb-3 opacity-20" />
+          <p className="text-sm font-medium">Sin comunicados activos</p>
+          <p className="text-xs mt-1">Cuando el mall publique novedades, aparecerán aquí.</p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {comms.map(comm => {
-            const pConf = PRIORITY_CONFIG[comm.priority];
-            const PIcon = pConf.icon;
-            const read = getRead(comm.id);
-            const isRead = !!read?.readAt;
-            const isConfirmed = !!read?.confirmedAt;
-            const isOpen = expanded === comm.id;
+        <div className="space-y-6">
 
-            return (
-              <div
-                key={comm.id}
-                className={`rounded-2xl border shadow-sm overflow-hidden ${pConf.border} ${pConf.bg} ${!isRead ? 'ring-2 ring-amber-400/30' : ''}`}
-              >
-                <button
-                  className="w-full text-left px-5 py-4 flex items-center gap-4"
-                  onClick={() => handleOpen(comm)}
-                >
-                  <span className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full shrink-0 ${pConf.badge}`}>
-                    <PIcon className="w-3 h-3" /> {pConf.label}
-                  </span>
-                  <div className="flex-1 min-w-0 text-left">
-                    <div className="flex items-center gap-2">
-                      {!isRead && (
-                        <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
-                      )}
-                      <p className={`font-semibold truncate ${isRead ? 'text-slate-700' : 'text-slate-900'}`}>
-                        {comm.title}
-                      </p>
-                    </div>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      {new Date(comm.createdAt).toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' })}
-                      {isRead && <span className="ml-2 text-emerald-600">· Leído</span>}
-                      {isConfirmed && <span className="ml-1 text-emerald-600">· Confirmado</span>}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {comm.requiresReadConfirmation && !isConfirmed && (
-                      <span className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full font-medium">
-                        Pendiente de confirmar
-                      </span>
-                    )}
-                    {isOpen ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
-                  </div>
-                </button>
-
-                {isOpen && (
-                  <div className="px-5 pb-5 border-t border-slate-100">
-                    <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap mt-4">{comm.body}</p>
-
-                    {comm.responseDeadline && (
-                      <p className="text-xs text-slate-500 mt-3 flex items-center gap-1.5">
-                        <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
-                        Fecha límite: {new Date(comm.responseDeadline).toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' })}
-                      </p>
-                    )}
-
-                    {comm.requiresReadConfirmation && !isConfirmed && (
-                      <button
-                        onClick={() => handleConfirm(comm)}
-                        disabled={confirming === comm.id}
-                        className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-60 text-white font-semibold text-sm rounded-xl transition-colors"
-                      >
-                        <CheckCircle2 className="w-4 h-4" />
-                        {confirming === comm.id ? 'Confirmando...' : 'Confirmar lectura'}
-                      </button>
-                    )}
-
-                    {isConfirmed && (
-                      <div className="mt-4 inline-flex items-center gap-2 text-sm text-emerald-600 font-medium">
-                        <CheckCircle2 className="w-4 h-4" />
-                        Lectura confirmada
-                      </div>
-                    )}
-                  </div>
-                )}
+          {/* Urgentes */}
+          {criticas.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <AlertTriangle className="w-4 h-4 text-red-500" />
+                <h2 className="text-xs font-bold text-red-600 uppercase tracking-wider">
+                  Urgente{criticas.length > 1 ? 's' : ''}
+                </h2>
               </div>
-            );
-          })}
+              <div className="space-y-3">
+                {criticas.map((c) => <ComunicadoCard key={c.id} c={c} />)}
+              </div>
+            </div>
+          )}
+
+          {/* Últimos 7 días */}
+          {nuevos.length > 0 && (
+            <div>
+              <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
+                Últimos 7 días
+              </h2>
+              <div className="space-y-3">
+                {nuevos.map((c) => <ComunicadoCard key={c.id} c={c} />)}
+              </div>
+            </div>
+          )}
+
+          {/* Anteriores */}
+          {anteriores.length > 0 && (
+            <div>
+              <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
+                Anteriores
+              </h2>
+              <div className="space-y-3">
+                {anteriores.map((c) => <ComunicadoCard key={c.id} c={c} />)}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

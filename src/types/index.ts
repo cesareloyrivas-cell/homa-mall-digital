@@ -109,13 +109,17 @@ export interface Communication {
   title: string;
   body: string;
   priority: CommunicationPriority;
+  status?: 'borrador' | 'publicado' | 'archivado';
   targetType: 'all' | 'category' | 'specific' | 'pending_docs';
   targetCommerceIds?: string[];
   targetCategories?: string[];
   requiresReadConfirmation: boolean;
   attachments?: string[];
   createdBy: string;
+  authorName?: string;
   createdAt: string;
+  publishedAt?: string;
+  expiresAt?: string;
   responseDeadline?: string;
 }
 

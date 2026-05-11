@@ -1,61 +1,58 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { getCommunications, createCommunication, getAllReads } from '@/lib/communicationService';
-import { getCommerces } from '@/lib/commerceService';
-import { Communication, CommunicationPriority, CommunicationRead, Commerce, COMMERCE_CATEGORIES } from '@/types';
 import {
-  Megaphone, Plus, X, ChevronDown, ChevronUp, Users, Building2,
-  AlertTriangle, Info, AlertCircle, Bell, RefreshCw, CheckCircle2,
+  getAllComunicados, createComunicado, updateComunicado,
+  deleteComunicado, publishComunicado, archiveComunicado,
+} from '@/lib/comunicadoService';
+import { Communication, COMMERCE_CATEGORIES } from '@/types';
+import {
+  Megaphone, Plus, Send, Archive, Trash2, Edit2,
+  Globe, Tag, RefreshCw, X, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-const PRIORITY_CONFIG: Record<CommunicationPriority, { label: string; color: string; icon: typeof Info }> = {
-  baja: { label: 'Baja', color: 'bg-slate-100 text-slate-600', icon: Info },
-  media: { label: 'Media', color: 'bg-blue-100 text-blue-700', icon: Bell },
-  alta: { label: 'Alta', color: 'bg-amber-100 text-amber-700', icon: AlertTriangle },
-  critica: { label: 'Crítica', color: 'bg-red-100 text-red-700', icon: AlertCircle },
+type FilterTab = 'activos' | 'publicado' | 'borrador' | 'archivado';
+
+const PRIORITY_CONFIG = {
+  baja:    { label: 'Baja',    color: 'text-slate-600 bg-slate-100' },
+  media:   { label: 'Media',   color: 'text-blue-700 bg-blue-100' },
+  alta:    { label: 'Alta',    color: 'text-amber-700 bg-amber-100' },
+  critica: { label: 'Crítica', color: 'text-red-700 bg-red-100' },
 };
 
-const TARGET_OPTIONS = [
-  { value: 'all', label: 'Todos los locales' },
-  { value: 'category', label: 'Por categoría' },
-  { value: 'specific', label: 'Locales específicos' },
-  { value: 'pending_docs', label: 'Documentación pendiente' },
-] as const;
-
-const inputCls = 'w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent';
+const STATUS_CONFIG = {
+  borrador:  { label: 'Borrador',  color: 'text-slate-500 bg-slate-100' },
+  publicado: { label: 'Publicado', color: 'text-emerald-700 bg-emerald-100' },
+  archivado: { label: 'Archivado', color: 'text-slate-400 bg-slate-50 border border-slate-200' },
+};
 
 const EMPTY_FORM = {
   title: '',
   body: '',
-  priority: 'media' as CommunicationPriority,
+  priority: 'media' as Communication['priority'],
   targetType: 'all' as Communication['targetType'],
-  targetCommerceIds: [] as string[],
   targetCategories: [] as string[],
-  requiresReadConfirmation: false,
-  responseDeadline: '',
+  expiresAt: '',
 };
 
 export default function AdminComunicacionesPage() {
   const { usuario } = useAuth();
-  const [comms, setComms] = useState<Communication[]>([]);
-  const [reads, setReads] = useState<CommunicationRead[]>([]);
-  const [commerces, setCommerces] = useState<Commerce[]>([]);
+  const [comunicados, setComunicados] = useState<Communication[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [tab, setTab] = useState<FilterTab>('activos');
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editing, setEditing] = useState<Communication | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
     try {
-      const [c, r, cs] = await Promise.all([getCommunications(), getAllReads(), getCommerces()]);
-      setComms(c);
-      setReads(r);
-      setCommerces(cs);
+      setComunicados(await getAllComunicados());
     } finally {
       setLoading(false);
     }
@@ -63,300 +60,406 @@ export default function AdminComunicacionesPage() {
 
   useEffect(() => { load(); }, []);
 
-  const readCountById = useMemo(() => {
-    const map: Record<string, number> = {};
-    reads.forEach(r => {
-      if (r.readAt) map[r.communicationId] = (map[r.communicationId] ?? 0) + 1;
-    });
-    return map;
-  }, [reads]);
+  function openCreate() {
+    setEditing(null);
+    setForm(EMPTY_FORM);
+    setModalOpen(true);
+  }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!usuario) return;
+  function openEdit(c: Communication) {
+    setEditing(c);
+    setForm({
+      title: c.title,
+      body: c.body,
+      priority: c.priority,
+      targetType: c.targetType,
+      targetCategories: c.targetCategories ?? [],
+      expiresAt: c.expiresAt ?? '',
+    });
+    setModalOpen(true);
+  }
+
+  async function handleSave(publish: boolean) {
+    if (!form.title.trim() || !form.body.trim()) {
+      toast.error('El título y el mensaje son obligatorios.');
+      return;
+    }
+    if (form.targetType === 'category' && form.targetCategories.length === 0) {
+      toast.error('Seleccioná al menos una categoría.');
+      return;
+    }
     setSaving(true);
     try {
-      await createCommunication({
-        ...form,
-        targetCommerceIds: form.targetType === 'specific' ? form.targetCommerceIds : undefined,
-        targetCategories: form.targetType === 'category' ? form.targetCategories : undefined,
-        responseDeadline: form.responseDeadline || undefined,
-        createdBy: usuario.uid,
-      });
-      toast.success('Circular enviada.');
-      setShowForm(false);
-      setForm(EMPTY_FORM);
+      const now = new Date().toISOString();
+      if (editing) {
+        const updates: Partial<Communication> = {
+          title: form.title,
+          body: form.body,
+          priority: form.priority,
+          targetType: form.targetType,
+          targetCategories: form.targetType === 'category' ? form.targetCategories : [],
+          expiresAt: form.expiresAt || undefined,
+        };
+        if (publish && editing.status !== 'publicado') {
+          updates.status = 'publicado';
+          updates.publishedAt = now;
+        } else if (!publish && editing.status !== 'publicado') {
+          updates.status = 'borrador';
+        }
+        await updateComunicado(editing.id, updates);
+        toast.success('Comunicado actualizado.');
+      } else {
+        await createComunicado({
+          title: form.title,
+          body: form.body,
+          priority: form.priority,
+          targetType: form.targetType,
+          targetCategories: form.targetType === 'category' ? form.targetCategories : [],
+          expiresAt: form.expiresAt || undefined,
+          status: publish ? 'publicado' : 'borrador',
+          publishedAt: publish ? now : undefined,
+          tenantId: process.env.NEXT_PUBLIC_DEFAULT_TENANT_ID ?? 'homa_mall',
+          createdBy: usuario?.uid ?? '',
+          authorName: usuario?.displayName ?? usuario?.email ?? 'Admin',
+          requiresReadConfirmation: false,
+          createdAt: now,
+        });
+        toast.success(publish ? '¡Comunicado publicado!' : 'Guardado como borrador.');
+      }
+      setModalOpen(false);
       load();
     } catch {
-      toast.error('No se pudo enviar la circular.');
+      toast.error('No se pudo guardar el comunicado.');
     } finally {
       setSaving(false);
     }
   }
 
-  function toggleCategory(cat: string) {
-    setForm(f => ({
-      ...f,
-      targetCategories: f.targetCategories.includes(cat)
-        ? f.targetCategories.filter(c => c !== cat)
-        : [...f.targetCategories, cat],
-    }));
+  async function handlePublish(id: string) {
+    try {
+      await publishComunicado(id);
+      toast.success('Comunicado publicado.');
+      setComunicados((prev) =>
+        prev.map((c) => c.id === id
+          ? { ...c, status: 'publicado', publishedAt: new Date().toISOString() }
+          : c)
+      );
+    } catch { toast.error('Error al publicar.'); }
   }
 
-  function toggleCommerce(id: string) {
-    setForm(f => ({
-      ...f,
-      targetCommerceIds: f.targetCommerceIds.includes(id)
-        ? f.targetCommerceIds.filter(c => c !== id)
-        : [...f.targetCommerceIds, id],
-    }));
+  async function handleArchive(id: string) {
+    try {
+      await archiveComunicado(id);
+      toast.success('Comunicado archivado.');
+      setComunicados((prev) => prev.map((c) => c.id === id ? { ...c, status: 'archivado' } : c));
+    } catch { toast.error('Error al archivar.'); }
   }
+
+  async function handleDelete(id: string) {
+    try {
+      await deleteComunicado(id);
+      toast.success('Comunicado eliminado.');
+      setComunicados((prev) => prev.filter((c) => c.id !== id));
+    } catch { toast.error('Error al eliminar.'); }
+    finally { setDeleteConfirm(null); }
+  }
+
+  const counts = {
+    publicado: comunicados.filter((c) => c.status === 'publicado').length,
+    borrador:  comunicados.filter((c) => c.status === 'borrador').length,
+    archivado: comunicados.filter((c) => c.status === 'archivado').length,
+  };
+
+  const filtered = comunicados.filter((c) =>
+    tab === 'activos'   ? c.status !== 'archivado' :
+    tab === 'publicado' ? c.status === 'publicado' :
+    tab === 'borrador'  ? c.status === 'borrador'  :
+    c.status === 'archivado'
+  );
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="p-6 max-w-4xl mx-auto">
+
+      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-bold text-slate-900">Comunicaciones</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Circulares y avisos para los propietarios de locales</p>
+          <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+            <Megaphone className="w-5 h-5 text-amber-500" />
+            Comunicaciones
+          </h1>
+          <p className="text-sm text-slate-500 mt-0.5">
+            Publicá avisos, recordatorios y novedades para los locales del mall.
+          </p>
         </div>
         <div className="flex gap-2">
-          <button onClick={load} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">
+          <button onClick={load}
+            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">
             <RefreshCw className="w-4 h-4" />
           </button>
-          <button
-            onClick={() => setShowForm(true)}
-            className="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold px-4 py-2.5 rounded-xl text-sm transition-colors"
-          >
-            <Plus className="w-4 h-4" /> Nueva circular
+          <button onClick={openCreate}
+            className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold text-sm px-4 py-2 rounded-xl transition-colors">
+            <Plus className="w-4 h-4" /> Nuevo comunicado
           </button>
         </div>
       </div>
 
-      {/* Form */}
-      {showForm && (
-        <div className="bg-white rounded-2xl border border-amber-200 shadow-sm p-6 mb-6">
-          <div className="flex items-center justify-between mb-5">
-            <h2 className="font-semibold text-slate-900">Nueva circular</h2>
-            <button onClick={() => setShowForm(false)} className="text-slate-400 hover:text-slate-600">
-              <X className="w-5 h-5" />
-            </button>
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-3 mb-5">
+        {[
+          { label: 'Publicados', count: counts.publicado, cls: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-100' },
+          { label: 'Borradores', count: counts.borrador,  cls: 'text-slate-700',   bg: 'bg-slate-50 border-slate-200' },
+          { label: 'Archivados', count: counts.archivado, cls: 'text-slate-400',   bg: 'bg-slate-50 border-slate-100' },
+        ].map((s) => (
+          <div key={s.label} className={`border rounded-2xl p-4 ${s.bg}`}>
+            <div className={`text-2xl font-bold ${s.cls}`}>{s.count}</div>
+            <div className="text-xs text-slate-500 mt-0.5">{s.label}</div>
           </div>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">Asunto *</label>
-              <input
-                required
-                type="text"
-                className={inputCls}
-                placeholder="Ej: Actualización de habilitaciones municipales"
-                value={form.title}
-                onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-              />
-            </div>
+        ))}
+      </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">Contenido *</label>
-              <textarea
-                required
-                rows={5}
-                className={inputCls}
-                placeholder="Escribí el mensaje de la circular..."
-                value={form.body}
-                onChange={e => setForm(f => ({ ...f, body: e.target.value }))}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">Prioridad</label>
-                <select
-                  className={inputCls}
-                  value={form.priority}
-                  onChange={e => setForm(f => ({ ...f, priority: e.target.value as CommunicationPriority }))}
-                >
-                  <option value="baja">Baja</option>
-                  <option value="media">Media</option>
-                  <option value="alta">Alta</option>
-                  <option value="critica">Crítica</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">Destinatarios</label>
-                <select
-                  className={inputCls}
-                  value={form.targetType}
-                  onChange={e => setForm(f => ({ ...f, targetType: e.target.value as Communication['targetType'] }))}
-                >
-                  {TARGET_OPTIONS.map(o => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {/* Category picker */}
-            {form.targetType === 'category' && (
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">Categorías *</label>
-                <div className="flex flex-wrap gap-2">
-                  {COMMERCE_CATEGORIES.map(cat => (
-                    <button
-                      key={cat}
-                      type="button"
-                      onClick={() => toggleCategory(cat)}
-                      className={`text-xs px-3 py-1.5 rounded-full font-medium border transition-colors ${
-                        form.targetCategories.includes(cat)
-                          ? 'bg-amber-500 text-slate-900 border-amber-500'
-                          : 'bg-white text-slate-600 border-slate-200 hover:border-amber-300'
-                      }`}
-                    >
-                      {cat}
-                    </button>
-                  ))}
-                </div>
-              </div>
+      {/* Filter tabs */}
+      <div className="flex gap-1 bg-slate-100 rounded-xl p-1 mb-5">
+        {(['activos', 'publicado', 'borrador', 'archivado'] as FilterTab[]).map((t) => (
+          <button key={t} onClick={() => setTab(t)}
+            className={`flex-1 text-sm font-medium py-1.5 rounded-lg capitalize transition-colors ${
+              tab === t ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'
+            }`}>
+            {t === 'activos' ? 'Activos' : t.charAt(0).toUpperCase() + t.slice(1)}
+            {t !== 'activos' && counts[t as keyof typeof counts] > 0 && (
+              <span className="ml-1 text-xs text-slate-400">({counts[t as keyof typeof counts]})</span>
             )}
-
-            {/* Commerce picker */}
-            {form.targetType === 'specific' && (
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">Locales *</label>
-                <div className="border border-slate-200 rounded-xl max-h-48 overflow-y-auto divide-y divide-slate-100">
-                  {commerces.map(c => (
-                    <label key={c.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        className="rounded accent-amber-500"
-                        checked={form.targetCommerceIds.includes(c.id)}
-                        onChange={() => toggleCommerce(c.id)}
-                      />
-                      <span className="text-sm text-slate-700">{c.name}</span>
-                      <span className="text-xs text-slate-400 ml-auto">{c.locationCode}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1.5">Fecha límite de respuesta</label>
-                <input
-                  type="date"
-                  className={inputCls}
-                  value={form.responseDeadline}
-                  onChange={e => setForm(f => ({ ...f, responseDeadline: e.target.value }))}
-                />
-              </div>
-              <div className="flex items-end pb-2.5">
-                <label className="flex items-center gap-2.5 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="rounded accent-amber-500 w-4 h-4"
-                    checked={form.requiresReadConfirmation}
-                    onChange={e => setForm(f => ({ ...f, requiresReadConfirmation: e.target.checked }))}
-                  />
-                  <span className="text-sm text-slate-700 font-medium">Requiere confirmación de lectura</span>
-                </label>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3 pt-2">
-              <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2.5 text-sm font-medium text-slate-600 hover:text-slate-900">
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-60 text-slate-900 font-bold rounded-xl text-sm transition-colors"
-              >
-                {saving ? 'Enviando...' : 'Enviar circular'}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+          </button>
+        ))}
+      </div>
 
       {/* List */}
       {loading ? (
         <div className="space-y-3">
-          {[1, 2, 3].map(i => <div key={i} className="h-24 bg-slate-100 rounded-2xl animate-pulse" />)}
+          {[1, 2, 3].map((i) => <div key={i} className="h-24 bg-slate-100 rounded-2xl animate-pulse" />)}
         </div>
-      ) : comms.length === 0 ? (
-        <div className="text-center py-20 bg-white rounded-2xl border border-slate-100">
-          <Megaphone className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-          <p className="text-slate-500 font-medium">No hay circulares enviadas aún.</p>
-          <p className="text-slate-400 text-sm mt-1">Creá la primera para comunicarte con los locales.</p>
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-16 text-slate-400">
+          <Megaphone className="w-10 h-10 mx-auto mb-3 opacity-20" />
+          <p className="text-sm">No hay comunicados en esta sección.</p>
+          {tab === 'activos' && (
+            <p className="text-xs mt-1">Usá el botón de arriba para crear el primero.</p>
+          )}
         </div>
       ) : (
         <div className="space-y-3">
-          {comms.map(c => {
-            const pConf = PRIORITY_CONFIG[c.priority];
-            const PIcon = pConf.icon;
-            const isOpen = expanded === c.id;
-            const readCount = readCountById[c.id] ?? 0;
-            return (
-              <div key={c.id} className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-                <button
-                  className="w-full text-left px-5 py-4 flex items-center gap-4"
-                  onClick={() => setExpanded(isOpen ? null : c.id)}
-                >
-                  <span className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full shrink-0 ${pConf.color}`}>
-                    <PIcon className="w-3 h-3" /> {pConf.label}
-                  </span>
-                  <div className="flex-1 min-w-0 text-left">
-                    <p className="font-semibold text-slate-900 truncate">{c.title}</p>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      {new Date(c.createdAt).toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' })}
-                      {' · '}
-                      {TARGET_OPTIONS.find(o => o.value === c.targetType)?.label}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3 shrink-0">
-                    {c.requiresReadConfirmation && (
-                      <span className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full font-medium">
-                        Requiere confirmación
-                      </span>
-                    )}
-                    <span className="flex items-center gap-1 text-xs text-slate-500">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                      {readCount} {readCount === 1 ? 'lectura' : 'lecturas'}
-                    </span>
-                    {isOpen ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
-                  </div>
-                </button>
+          {filtered.map((c) => {
+            const pConf = PRIORITY_CONFIG[c.priority as keyof typeof PRIORITY_CONFIG] ?? PRIORITY_CONFIG.media;
+            const sConf = STATUS_CONFIG[c.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.borrador;
+            const isOpen = expandedId === c.id;
 
-                {isOpen && (
-                  <div className="px-5 pb-5 border-t border-slate-100">
-                    <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap mt-4">{c.body}</p>
-                    {c.responseDeadline && (
-                      <p className="text-xs text-slate-500 mt-3 flex items-center gap-1.5">
-                        <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
-                        Fecha límite: {new Date(c.responseDeadline).toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' })}
-                      </p>
+            return (
+              <div key={c.id} className={`bg-white rounded-2xl border shadow-sm ${
+                c.priority === 'critica' ? 'border-red-200' :
+                c.priority === 'alta'    ? 'border-amber-200' : 'border-slate-100'
+              }`}>
+                <div className="flex items-start gap-4 p-5">
+                  <div className="flex-1 min-w-0">
+                    {/* Badges row */}
+                    <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                      <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${pConf.color}`}>
+                        {pConf.label}
+                      </span>
+                      <span className={`text-xs font-medium px-2.5 py-0.5 rounded-full ${sConf.color}`}>
+                        {sConf.label}
+                      </span>
+                      <span className="text-xs text-slate-400 flex items-center gap-1">
+                        {c.targetType === 'all'
+                          ? <><Globe className="w-3 h-3" /> Todos los locales</>
+                          : c.targetType === 'category'
+                          ? <><Tag className="w-3 h-3" /> {c.targetCategories?.join(', ')}</>
+                          : 'Específicos'}
+                      </span>
+                    </div>
+
+                    <h3 className="font-semibold text-slate-900 text-sm">{c.title}</h3>
+
+                    {isOpen && (
+                      <p className="text-sm text-slate-600 mt-2 leading-relaxed whitespace-pre-line">{c.body}</p>
                     )}
-                    {c.targetType === 'specific' && c.targetCommerceIds && (
-                      <div className="mt-3 flex flex-wrap gap-1.5">
-                        {c.targetCommerceIds.map(id => {
-                          const cm = commerces.find(x => x.id === id);
-                          return cm ? (
-                            <span key={id} className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">{cm.name}</span>
-                          ) : null;
-                        })}
-                      </div>
+
+                    <div className="flex gap-4 mt-1.5 text-xs text-slate-400">
+                      {c.status === 'publicado' && c.publishedAt && (
+                        <span>Publicado: {new Date(c.publishedAt).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                      )}
+                      {!c.publishedAt && (
+                        <span>Creado: {new Date(c.createdAt).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                      )}
+                      {c.expiresAt && (
+                        <span>Vence: {new Date(c.expiresAt).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Action buttons */}
+                  <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+                    <button
+                      onClick={() => setExpandedId(isOpen ? null : c.id)}
+                      className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                      title={isOpen ? 'Contraer' : 'Ver mensaje'}>
+                      {isOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                    </button>
+                    <button onClick={() => openEdit(c)}
+                      className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors" title="Editar">
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                    {c.status === 'borrador' && (
+                      <button onClick={() => handlePublish(c.id)}
+                        className="flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 rounded-lg transition-colors">
+                        <Send className="w-3 h-3" /> Publicar
+                      </button>
                     )}
-                    {c.targetType === 'category' && c.targetCategories && (
-                      <div className="mt-3 flex flex-wrap gap-1.5">
-                        {c.targetCategories.map(cat => (
-                          <span key={cat} className="text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full">{cat}</span>
-                        ))}
+                    {c.status === 'publicado' && (
+                      <button onClick={() => handleArchive(c.id)}
+                        className="flex items-center gap-1 text-xs text-slate-500 hover:bg-slate-100 border border-slate-200 px-2.5 py-1.5 rounded-lg transition-colors">
+                        <Archive className="w-3 h-3" /> Archivar
+                      </button>
+                    )}
+                    {deleteConfirm === c.id ? (
+                      <div className="flex gap-1">
+                        <button onClick={() => handleDelete(c.id)}
+                          className="text-xs font-semibold text-red-600 hover:bg-red-50 border border-red-200 px-2 py-1.5 rounded-lg transition-colors">
+                          Confirmar
+                        </button>
+                        <button onClick={() => setDeleteConfirm(null)}
+                          className="text-xs text-slate-400 hover:bg-slate-100 border border-slate-200 px-2 py-1.5 rounded-lg transition-colors">
+                          No
+                        </button>
                       </div>
+                    ) : (
+                      <button onClick={() => setDeleteConfirm(c.id)}
+                        className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Eliminar">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     )}
                   </div>
-                )}
+                </div>
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* ─── Modal crear / editar ─────────────────────────────────────────────── */}
+      {modalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+              <h2 className="font-bold text-slate-900">
+                {editing ? 'Editar comunicado' : 'Nuevo comunicado'}
+              </h2>
+              <button onClick={() => setModalOpen(false)}
+                className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors">
+                <X className="w-4 h-4 text-slate-500" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Título *</label>
+                <input type="text"
+                  placeholder="Ej: Recordatorio vencimiento de habilitaciones"
+                  value={form.title}
+                  onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Mensaje *</label>
+                <textarea
+                  placeholder="Escribí el contenido del comunicado..."
+                  value={form.body}
+                  onChange={(e) => setForm((f) => ({ ...f, body: e.target.value }))}
+                  rows={5}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">Prioridad</label>
+                  <select value={form.priority}
+                    onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value as Communication['priority'] }))}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400">
+                    <option value="baja">Baja — informativo</option>
+                    <option value="media">Media — aviso</option>
+                    <option value="alta">Alta — importante</option>
+                    <option value="critica">Crítica — urgente</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">Destinatarios</label>
+                  <select value={form.targetType}
+                    onChange={(e) => setForm((f) => ({
+                      ...f,
+                      targetType: e.target.value as Communication['targetType'],
+                      targetCategories: [],
+                    }))}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400">
+                    <option value="all">Todos los locales</option>
+                    <option value="category">Por categoría</option>
+                  </select>
+                </div>
+              </div>
+
+              {form.targetType === 'category' && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-2">
+                    Categorías destinatarias *
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {COMMERCE_CATEGORIES.filter((c) => c !== 'Otro').map((cat) => (
+                      <button key={cat} type="button"
+                        onClick={() => setForm((f) => ({
+                          ...f,
+                          targetCategories: f.targetCategories.includes(cat)
+                            ? f.targetCategories.filter((x) => x !== cat)
+                            : [...f.targetCategories, cat],
+                        }))}
+                        className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                          form.targetCategories.includes(cat)
+                            ? 'bg-amber-500 border-amber-500 text-slate-900 font-semibold'
+                            : 'border-slate-200 text-slate-600 hover:border-amber-300'
+                        }`}>
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+                  Vence el{' '}
+                  <span className="font-normal text-slate-400">(opcional — vacío = vigencia indefinida)</span>
+                </label>
+                <input type="date" value={form.expiresAt}
+                  onChange={(e) => setForm((f) => ({ ...f, expiresAt: e.target.value }))}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 px-6 py-4 border-t border-slate-100">
+              <button onClick={() => handleSave(false)} disabled={saving}
+                className="flex-1 border border-slate-200 text-slate-700 font-semibold text-sm py-2.5 rounded-xl hover:bg-slate-50 transition-colors disabled:opacity-60">
+                Guardar borrador
+              </button>
+              <button onClick={() => handleSave(true)} disabled={saving}
+                className="flex-1 flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-60 text-slate-900 font-semibold text-sm py-2.5 rounded-xl transition-colors">
+                <Send className="w-4 h-4" />
+                {saving ? 'Guardando...' :
+                  editing?.status === 'publicado' ? 'Guardar cambios' : 'Publicar ahora'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
